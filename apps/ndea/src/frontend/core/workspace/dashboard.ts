@@ -1,9 +1,9 @@
 /**
  * The dashboard: named layouts, each a json-render flat spec `{ root, elements }`
  * that composes the whole workspace UI. Every element is one component: layout
- * (`split`, `stack`), a tile's `tabs`, content (`text`), controls (`select`), an
- * empty `slot`, or a view (`scatter`, `table`, `vgplot`, …) whose props are its
- * configuration. Element ids are unique across every layout of the workspace.
+ * (`split`, `stack`), a tile's `tabs`, an empty `slot`, or a view (`scatter`,
+ * `table`, `text`, `select`, …) whose props are its configuration. Element ids
+ * are unique across every layout of the workspace.
  *
  * Props every data component shares:
  * - `data`: the named data source it reads (see `data-sources.ts`); omitted
@@ -73,7 +73,7 @@ export interface LayoutDocument {
   readonly layout: string;
 }
 
-/** A literal string, or a json-render expression resolved against coordination state. */
+/** A literal string, or a json-render expression resolved against coordination state: what a `title` takes. */
 const textSchema = z.union([
   z.string(),
   z.object({ $template: z.string() }).strict(),
@@ -98,7 +98,8 @@ export interface ComponentInfo {
   readonly view: boolean;
 }
 
-const BUILTIN_COMPONENTS: Record<string, ComponentInfo> = {
+/** The layout components; everything else is a view definition. */
+const LAYOUT_COMPONENTS: Record<string, ComponentInfo> = {
   split: {
     title: "Split",
     description: "Two children side by side (row) or stacked (column); ratio is the first child's share.",
@@ -117,27 +118,6 @@ const BUILTIN_COMPONENTS: Record<string, ComponentInfo> = {
     children: "any",
     reads: false,
     binds: [],
-    view: false,
-  },
-  text: {
-    title: "Text",
-    description: "A heading or paragraph; `text` may be a {$template} over coordination state.",
-    props: z.object({ text: textSchema, variant: z.enum(["heading", "body", "muted"]) }).strict(),
-    defaults: { variant: "body" },
-    children: "none",
-    reads: false,
-    binds: [],
-    view: false,
-  },
-  select: {
-    title: "Select",
-    description:
-      "A picker over one column's values (with counts). Choosing values publishes {op:'in'} into its filter scope.",
-    props: z.object({ column: z.string().min(1), label: z.string().optional() }).strict(),
-    defaults: {},
-    children: "none",
-    reads: true,
-    binds: ["filter"],
     view: false,
   },
   tabs: {
@@ -191,18 +171,16 @@ function viewComponents(): Record<string, ComponentInfo> {
 
 /** The component catalog. Definitions are static, so one table serves every caller. */
 export const COMPONENTS: Readonly<Record<string, ComponentInfo>> = Object.freeze({
-  ...BUILTIN_COMPONENTS,
+  ...LAYOUT_COMPONENTS,
   ...viewComponents(),
 });
 
 /**
- * Components an empty tile can take as-is: not layout, and valid at their
- * defaults (`text` needs text, `select` a column; agents add those with props).
+ * Views an empty tile can take as-is: valid at their defaults (`text` needs
+ * text, `select` a column; agents add those with props).
  */
 export const EMPTY_TILE_CHOICES: readonly string[] = Object.entries(COMPONENTS)
-  .filter(
-    ([type, info]) => !["split", "stack", "tabs", "slot"].includes(type) && info.props.safeParse(info.defaults).success,
-  )
+  .filter(([, info]) => info.view && info.props.safeParse(info.defaults).success)
   .map(([type]) => type);
 
 const COMMON_PROPS = new Set<string>(["data", "title", ...COORDINATION_TYPE_IDS]);
@@ -224,6 +202,12 @@ export function elementScope(element: DashboardElement | undefined, type: Coordi
 export function elementData(element: DashboardElement | undefined): string | undefined {
   const data = element?.props.data;
   return typeof data === "string" ? data : undefined;
+}
+
+/** The element's own `title` when set and not empty, else its component's title: tab strips, links, summaries. */
+export function elementTitle(element: DashboardElement): string {
+  const { title } = element.props;
+  return typeof title === "string" && title ? title : (COMPONENTS[element.type]?.title ?? element.type);
 }
 
 /** Every rule the element schema cannot express for one layout's spec at `base`, as `[path, message]` pairs. */
@@ -425,15 +409,15 @@ export function removeElement(dashboard: Dashboard, id: string, reserved: Readon
   };
 }
 
-/** Split an element; the new empty slot sits on `side`. Returns the dashboard and the slot id. */
+/** Split an element; the new empty slot (`slot`, default a fresh id) sits on `side`. Returns the dashboard and the slot id. */
 export function splitElement(
   dashboard: Dashboard,
   id: string,
   side: SplitSide,
   reserved: ReadonlySet<string> = NO_IDS,
+  slot: string = freshElementId(dashboard, "slot", reserved),
 ): [Dashboard, string | null] {
   if (!dashboard.elements[id]) return [dashboard, null];
-  const slot = freshElementId(dashboard, "slot", reserved);
   const split = freshElementId(dashboard, "split", reserved);
   const direction = side === "left" || side === "right" ? "row" : "column";
   const children = side === "left" || side === "up" ? [slot, id] : [id, slot];

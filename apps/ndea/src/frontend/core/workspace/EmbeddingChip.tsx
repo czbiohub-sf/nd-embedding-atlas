@@ -13,7 +13,7 @@ import { useState } from "react";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { activeSpec, COMPONENTS } from "./dashboard";
-import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
+import { applyOrToast, useWorkspace, useWorkspaceSelector } from "./workspace-context";
 
 type Obsm = Record<string, { loaded: boolean; n_dims?: number | null }>;
 
@@ -66,7 +66,9 @@ export function EmbeddingChip({ id }: { id: string }) {
                 key={key}
                 className={cn(popoverRow, "w-full text-left hover:bg-muted")}
                 onClick={() => {
-                  if (key !== current) ws.setElementProps(id, { obsmKey: key, xDim: 0, yDim: 1, zDim: null });
+                  if (key !== current) {
+                    applyOrToast(ws, [{ op: "set_props", id, props: { obsmKey: key, xDim: 0, yDim: 1, zDim: null } }]);
+                  }
                   setOpen(false);
                 }}
               >

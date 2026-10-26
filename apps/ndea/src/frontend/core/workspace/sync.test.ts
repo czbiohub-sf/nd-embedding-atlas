@@ -31,7 +31,7 @@ const agentWrite = (server: Workspace, base: number, ops: JsonPatchOp[]) =>
 async function session(options?: { live?: boolean }) {
   const server = Workspace.memory();
   const workspace = new WorkspaceStore();
-  workspace.fillSlot("slot-1", "count");
+  workspace.apply([{ op: "add", type: "count", at: { slot: "slot-1" } }]);
   const initial = { revision: 0, document: emptyWorkspaceDocument() };
   const sync = new WorkspaceSync(workspace, initial, memoryTransport(server, options), (e) => {
     throw new Error(e.join("; "));
@@ -50,8 +50,8 @@ describe("WorkspaceSync", () => {
       document: { layouts: { main: { spec: { elements: { "count-1": { type: "count" } } } } } },
     });
 
-    workspace.setElementProps("count-1", { title: "Cells" });
-    workspace.setElementProps("count-1", { title: "All cells" });
+    workspace.apply([{ op: "set_props", id: "count-1", props: { title: "Cells" } }]);
+    workspace.apply([{ op: "set_props", id: "count-1", props: { title: "All cells" } }]);
     await sync.flush();
     expect(server.get()).toMatchObject({
       revision: 2,
@@ -69,7 +69,7 @@ describe("WorkspaceSync", () => {
 
   test("a remote edit applies locally and rebases pending local edits instead of dropping either", async () => {
     const { server, workspace, sync } = await session();
-    workspace.setElementProps("count-1", { title: "Mine" });
+    workspace.apply([{ op: "set_props", id: "count-1", props: { title: "Mine" } }]);
     await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
     await sync.flush();
 
@@ -86,7 +86,7 @@ describe("WorkspaceSync", () => {
   test("a stale revision (409) replays local ops onto the server document and resends", async () => {
     const { server, workspace, sync } = await session({ live: false });
     await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
-    workspace.setElementProps("count-1", { title: "Mine" });
+    workspace.apply([{ op: "set_props", id: "count-1", props: { title: "Mine" } }]);
     await sync.flush(); // 409 → rebase onto revision 2
     await sync.flush(); // resend on top of it
 

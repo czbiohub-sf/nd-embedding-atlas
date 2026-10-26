@@ -96,11 +96,11 @@ describe("GET /api/workspace/elements/:id and /data/:name", () => {
     expect(body.predicate).toContain("area > 20");
   });
 
-  test("unknown ids are 404s; layout and text elements read no data", async () => {
+  test("unknown ids are 404s; layout elements read no data", async () => {
     const state = await session();
     expect((await result(state, { element: "ghost" })).status).toBe(404);
     expect((await result(state, { data: "ghost" })).status).toBe(404);
-    expect((await result(state, { element: "title" })).status).toBe(400);
+    expect((await result(state, { element: "root" })).status).toBe(400);
   });
 
   test("a stacked statement in document SQL is refused and the data survives", async () => {

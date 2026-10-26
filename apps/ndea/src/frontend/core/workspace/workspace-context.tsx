@@ -16,6 +16,7 @@ import { ComponentRuntimeManager } from "@/core/component/runtime/workspace-runt
 import { wsClient } from "@/lib/ws-client";
 import { createHttpWorkspaceTransport, decodeWorkspaceDocument, WorkspaceSync, type WorkspaceTransport } from "./sync";
 import { WorkspaceStore } from "./workspace-store";
+import type { DashboardEdit } from "./edits";
 import type { WorkspaceSession } from "./types";
 
 const WorkspaceContext = createContext<WorkspaceStore | null>(null);
@@ -98,6 +99,15 @@ export function useWorkspace(): WorkspaceStore {
 
 export function useWorkspacePersistence(): WorkspacePersistenceState {
   return useContext(WorkspacePersistenceContext);
+}
+
+/** Named edits from the UI (`WorkspaceStore.apply`); an op that cannot apply becomes a toast. */
+export function applyOrToast(ws: WorkspaceStore, edits: readonly DashboardEdit[]): void {
+  try {
+    ws.apply(edits);
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** Re-renders when `select(workspace)` changes; it must return a stable value (a document reference or a primitive). */

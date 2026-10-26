@@ -108,7 +108,8 @@ describe("dashboard edits", () => {
       [[{ op: "unbind", id: "slot-1", type: "filter" }], 0, "not bound"],
       [[{ op: "remove_data", name: "infected" }], 0, 'no data source "infected"'],
       [[BUILD[1], BUILD[2], { op: "swap", a: "split-1", b: "count-1" }], 2, "cannot swap"],
-      [[BUILD[1], { op: "add_tab", tile: "count-1", type: "text" }], 1, "not a view"],
+      [[BUILD[1], { op: "add_tab", tile: "count-1", type: "stack" }], 1, "not a view"],
+      [[BUILD[1], { op: "split", id: "count-1", slot: "count-1" }], 1, "is taken"],
       [[BUILD[1], { op: "set_active_tab", tile: "count-1", id: "slot-1" }], 1, "not a tab"],
       [
         [
@@ -178,6 +179,38 @@ describe("tabs and layouts", () => {
     expect(parseWorkspaceDocument(doc).ok).toBe(true);
   });
 
+  test("split leaves an empty tile on its side (a tab splits its tile); set_props sets the ratio", () => {
+    let doc = applyDashboardEdits(emptyWorkspaceDocument(), [
+      ...TWO_VIEWS,
+      { op: "add_tab", tile: "table", type: "histogram", id: "hist" },
+      { op: "split", id: "hist", side: "up", slot: "empty" },
+      { op: "split", id: "count" },
+    ]);
+    const { elements } = doc.layouts.main.spec;
+    expect(elements["split-2"]).toEqual({
+      type: "split",
+      props: { direction: "column", ratio: 0.5 },
+      children: ["empty", "tabs-1"],
+    });
+    expect(elements.empty).toEqual({ type: "slot", props: {}, children: [] });
+    expect(elements["split-3"]).toEqual({
+      type: "split",
+      props: { direction: "row", ratio: 0.5 },
+      children: ["count", "slot-1"],
+    });
+    expect(parseWorkspaceDocument(doc).ok).toBe(true);
+
+    doc = applyDashboardEdits(doc, [
+      { op: "set_props", id: "split-2", props: { ratio: 0.3 } },
+      { op: "add", type: "count", id: "filled", at: { slot: "empty" } },
+    ]);
+    expect(doc.layouts.main.spec.elements["split-2"]).toEqual({
+      type: "split",
+      props: { direction: "column", ratio: 0.3 },
+      children: ["filled", "tabs-1"],
+    });
+  });
+
   test("layouts: a copy gets fresh ids, add targets the active layout, removal falls back", () => {
     let doc = applyDashboardEdits(emptyWorkspaceDocument(), [
       ...TWO_VIEWS,
@@ -239,5 +272,9 @@ test("describeEdit names each change in glossary words against the document it a
     "Change Count settings: title, data",
   );
   expect(say({ op: "remove", id: "ghost" })).toBe('Remove "ghost"');
+  expect(say({ op: "split", id: "table-1", side: "up" })).toBe("Add an empty tile above Table");
+  const titled = (title: string) => applyDashboardEdits(built, [{ op: "set_props", id: "count-1", props: { title } }]);
+  expect(describeEdit({ op: "remove", id: "count-1" }, titled("Cells"))).toBe('Remove "Cells"');
+  expect(describeEdit({ op: "remove", id: "count-1" }, titled(""))).toBe("Remove Count");
   expect(say({ op: "add_layout", name: "Review", from: "main" })).toBe('Add layout "Review" copied from layout "Main"');
 });

@@ -68,7 +68,7 @@ describe("dashboard validation", () => {
         elements: {
           tabs: { type: "tabs", props: { active: "ghost" }, children: ["v", "x"] },
           v: { type: "table", props: {}, children: [] },
-          x: { type: "text", props: { text: "x" }, children: [] },
+          x: { type: "slot", props: {}, children: [] },
         },
       }),
       layout: "nope",

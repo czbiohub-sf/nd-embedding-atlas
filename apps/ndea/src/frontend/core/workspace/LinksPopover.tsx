@@ -1,7 +1,8 @@
 /**
  * Links in the tile header: the indicator (one dot per link the view joins),
  * its popover, and `LinkRow`, the one row the popover and the Links flyout
- * share. Hovering a row rings its member tiles; Unlink is the `unbind` edit.
+ * share (lookups and values: `links.ts`). Hovering a row rings its member
+ * tiles; Unlink is the `unbind` edit.
  */
 
 import { NdScopesIcon } from "@ndea/ui/components/nd-icons";
@@ -9,10 +10,11 @@ import { Popover, PopoverContent, PopoverTrigger, popoverHeading, popoverSeparat
 import { cn } from "@ndea/ui/lib/utils";
 import { createContext, use, useState } from "react";
 
-import { COORDINATION_TYPE_IDS, type CoordinationState, type CoordinationTypeId } from "@/core/coordination/types";
-import { allElements, COMPONENTS, elementScope, findElement, type DashboardElement } from "./dashboard";
+import type { CoordinationTypeId } from "@/core/coordination/types";
+import { elementTitle, findElement } from "./dashboard";
+import { documentLinks, linkMembers, linkValue, type Link } from "./links";
 import type { WorkspaceDocument } from "./types";
-import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
+import { applyOrToast, useWorkspace, useWorkspaceSelector } from "./workspace-context";
 
 /** Opens the Links rail flyout; the shell provides it. */
 export const OpenLinksContext = createContext<() => void>(() => {});
@@ -33,50 +35,6 @@ export const LINK_LABEL: Record<CoordinationTypeId, string> = {
   ordering: "Sort",
 };
 
-/** What the link currently holds, in one phrase. */
-function linkValue(state: CoordinationState, type: CoordinationTypeId, scope: string): string {
-  switch (type) {
-    case "filter": {
-      const sources = Object.values(state.filter?.[scope] ?? {});
-      const clauses = sources.reduce((sum, facets) => sum + Object.keys(facets).length, 0);
-      return clauses === 0 ? "No selection" : clauses === 1 ? "1 clause" : `${clauses} clauses`;
-    }
-    case "focus": {
-      const index = state.focus?.[scope];
-      return index === null || index === undefined ? "Nothing focused" : `obs ${index.toLocaleString("en-US")}`;
-    }
-    case "colorBy":
-      return state.colorBy?.[scope] ?? "No color";
-    case "viewSync": {
-      const zoom = state.viewSync?.[scope]?.zoom;
-      return zoom === undefined ? "Not moved" : `Zoom ${zoom.toFixed(2)}`;
-    }
-    case "ordering": {
-      const order = state.ordering?.[scope];
-      return order ? `${order.col} ${order.dir}` : "Unsorted";
-    }
-  }
-}
-
-export const elementTitle = (element: DashboardElement): string => {
-  const { title } = element.props;
-  return typeof title === "string" && title ? title : (COMPONENTS[element.type]?.title ?? element.type);
-};
-
-export interface Link {
-  type: CoordinationTypeId;
-  scope: string;
-}
-
-/** Every link in the document, or only those `id` joins. */
-export function documentLinks(document: WorkspaceDocument, id?: string): Link[] {
-  return COORDINATION_TYPE_IDS.flatMap((type) => {
-    if (id === undefined) return Object.keys(document.state[type] ?? {}).map((scope) => ({ type, scope }));
-    const scope = elementScope(findElement(document, id), type);
-    return scope === undefined ? [] : [{ type, scope }];
-  });
-}
-
 const UNLINK = "rounded-sm px-1.5 py-0.5 text-sm text-text-muted hover:bg-accent hover:text-foreground";
 
 /**
@@ -86,10 +44,10 @@ const UNLINK = "rounded-sm px-1.5 py-0.5 text-sm text-text-muted hover:bg-accent
 export function LinkRow({ document, link, unlink }: { document: WorkspaceDocument; link: Link; unlink?: string }) {
   const ws = useWorkspace();
   const { type, scope } = link;
-  const members = allElements(document).filter(([, element]) => elementScope(element, type) === scope);
+  const members = linkMembers(document, link);
   const unbind = (id: string) => {
     ws.highlight([]);
-    ws.apply([{ op: "unbind", id, type }]);
+    applyOrToast(ws, [{ op: "unbind", id, type }]);
   };
   return (
     <div
@@ -109,9 +67,7 @@ export function LinkRow({ document, link, unlink }: { document: WorkspaceDocumen
       ) : (
         <span />
       )}
-      <span className="col-span-2 col-start-2 truncate font-mono text-sm">
-        {linkValue(document.state, type, scope)}
-      </span>
+      <span className="col-span-2 col-start-2 truncate font-mono text-sm">{linkValue(document.state, link)}</span>
       <span className="col-span-2 col-start-2 text-sm leading-[1.4] text-text-muted">
         {members.length === 0
           ? "No member views"

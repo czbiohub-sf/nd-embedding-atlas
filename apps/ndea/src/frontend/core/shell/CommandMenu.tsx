@@ -23,9 +23,21 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ndea/ui/
 import { Kbd } from "@ndea/ui/components/kbd";
 import { cn } from "@ndea/ui/lib/utils";
 
-import { activeSpec, COMPONENTS, EMPTY_TILE_CHOICES, tileView, type SplitSide } from "@/core/workspace/dashboard";
+import {
+  activeSpec,
+  COMPONENTS,
+  EMPTY_TILE_CHOICES,
+  tileProps,
+  tileView,
+  type SplitSide,
+} from "@/core/workspace/dashboard";
 import { copyReference } from "@/core/workspace/reference";
-import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "@/core/workspace/workspace-context";
+import {
+  applyOrToast,
+  useWorkspace,
+  useWorkspaceSelector,
+  useWorkspaceSession,
+} from "@/core/workspace/workspace-context";
 import { useTheme } from "@/ThemeProvider";
 import { CollectionSwitchDialog } from "./CollectionSwitchDialog";
 import { useCollectionsGroup } from "./collections";
@@ -359,14 +371,14 @@ export function WorkspaceCommandMenu({
         label: `Split tile ${side}`,
         sub,
         leading: SPLIT_ICON[side],
-        onSelect: () => ws.splitElement(selectedId, side),
+        onSelect: () => applyOrToast(ws, [{ op: "split", id: selectedId, side }]),
       })),
       {
         id: "tile:remove",
         label: "Remove tile",
         sub,
         leading: <Trash2Icon />,
-        onSelect: () => ws.removeElement(selectedId),
+        onSelect: () => applyOrToast(ws, [{ op: "remove", id: selectedId }]),
       },
     );
   }
@@ -378,7 +390,7 @@ export function WorkspaceCommandMenu({
         label: `Add ${title}`,
         sub: "to the first empty tile",
         leading: <PlusIcon />,
-        onSelect: () => ws.fillSlot(slot.id, type),
+        onSelect: () => applyOrToast(ws, [{ op: "add", type, props: tileProps(type), at: { slot: slot.id } }]),
       });
     }
   }
