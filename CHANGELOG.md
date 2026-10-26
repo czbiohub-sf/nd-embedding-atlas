@@ -59,6 +59,7 @@
 - _(build)_ Keep embedded frontend and DuckDB source manifests as stable development stubs
 - _(server)_ `PATCH /api/workspace` and MCP writes now reject a document whose typed clauses (a data source's `where`, a `state.filter` clause) name a column the dataset lacks, with a JSON-pointer issue per clause (e.g. `/data/bad/where/column`); raw `data.sql` is still checked only when it runs. Startup logs the same issues for the workspace file instead of refusing it.
 - _(frontend)_ The table's rows stayed blank after a filter change that also moved the focused obs: the reveal scrolled before the list had its new height, so the scroll was lost while the virtualizer drew the target rows. The reveal now waits for the rendered height.
+- _(frontend)_ Embedding wheel zoom applies at once about the cursor. It used to glide toward a target (6% per frame, so its speed followed the frame rate) with a magnetic stop near the home zoom, and a click mid-glide jumped to the glide's end. Fit view is the one remaining animation; a press stops it where it is. The unused `lerpSpeed`, `lerpEpsilon`, and `zoomSensitivity` interaction options are gone.
 
 ### 🛡️ Security
 

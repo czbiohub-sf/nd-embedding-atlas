@@ -44,12 +44,6 @@ export interface ScatterData {
 // ---------------------------------------------------------------------------
 
 export interface InteractionConfig {
-  /** Zoom easing speed (0–1). Default: 0.06 */
-  lerpSpeed?: number;
-  /** Zoom easing snap threshold. Default: 0.0001 */
-  lerpEpsilon?: number;
-  /** Per-scroll-tick zoom multiplier (>1 = zoom in). Default: 1.01 */
-  zoomSensitivity?: number;
   /** Minimum zoom level. Default: 0.1 */
   minZoom?: number;
   /** Maximum zoom level. Default: 500 */

@@ -146,7 +146,7 @@ export function createInteractionController(
     } else if (enablePan) {
       isDragging = true;
       dragPans = e.button !== 0 || e.ctrlKey || e.metaKey;
-      if (camera.settle()) viewChanged();
+      if (camera.halt()) viewChanged();
       lastMouse = pointerDownPos = p;
     } else return;
     overlay.setPointerCapture(e.pointerId);
@@ -197,7 +197,7 @@ export function createInteractionController(
       overlay.clientWidth / overlay.clientHeight || 1,
       Math.exp(-e.deltaY / 200),
     );
-    scheduleLoop();
+    viewChanged();
   }
 
   overlay.addEventListener("pointerdown", onPointerDown);
@@ -210,7 +210,7 @@ export function createInteractionController(
   let frameIdx = 0;
   let lastFpsReport = 0;
 
-  // Render loop: runs only while easing or when a render is pending.
+  // Render loop: runs only while a fit animates or a render is pending.
   let animId = 0;
   let loopRunning = false;
 

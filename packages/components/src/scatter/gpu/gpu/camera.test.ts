@@ -24,10 +24,10 @@ describe("PanZoom2D", () => {
     expectNear(ndc(cam, 2, -0.2, 0.6), [0, 1]);
   });
 
-  test("zoomAt keeps the point under the cursor fixed; drag moves it with the pointer", () => {
+  test("zoomAt applies at once and keeps the point under the cursor fixed; drag moves it with the pointer", () => {
     const cam = new PanZoom2D();
     cam.zoomAt(0.5, 0.5, 1, 2);
-    cam.settle();
+    expect(cam.animating).toBe(false);
     expect(cam.scale).toBeCloseTo(2);
     expectNear(ndc(cam, 1, 0.5, 0.5), [0.5, 0.5]);
     expectNear(ndc(cam, 1, 0, 0), [-0.5, -0.5]);
@@ -38,11 +38,28 @@ describe("PanZoom2D", () => {
     expectNear(ndc(cam, 1, x, y), [0.4, -0.2]);
   });
 
+  test("halt stops a fit where it is; a wheel zoom cancels the fit", () => {
+    const cam = new PanZoom2D();
+    const bounds: Bounds = { min: [2, 3, 0], max: [4, 7, 0] };
+    cam.fit(bounds, 1, 100, 0);
+    cam.step(50);
+    const reached = cam.toViewState();
+    expect(cam.halt()).toBe(true);
+    expect(cam.animating).toBe(false);
+    expect(cam.toViewState()).toEqual(reached);
+    expect(cam.step(100)).toBe(false);
+    expect(cam.halt()).toBe(false);
+
+    cam.fit(bounds, 1, 100, 0);
+    cam.zoomAt(0, 0, 1, 2);
+    expect(cam.animating).toBe(false);
+  });
+
   test("fit frames the bounds, centered", () => {
     const cam = new PanZoom2D();
     const bounds: Bounds = { min: [2, 3, 0], max: [4, 7, 0] };
     cam.fit(bounds, 1.5, 100, 0);
-    cam.settle();
+    cam.step(100);
     expectNear(ndc(cam, 1.5, 3, 5), [0, 0]);
     const extent = Math.max(...corners(bounds).flatMap(([x, y]) => ndc(cam, 1.5, x, y).slice(0, 2).map(Math.abs)));
     expect(extent).toBeLessThanOrEqual(1);
@@ -112,7 +129,7 @@ describe("Turntable3D", () => {
     const cam = new Turntable3D();
     const bounds: Bounds = { min: [-1, 0, 0.2], max: [0.6, 0.8, 1] };
     cam.fit(bounds, 0.7, 100, 0);
-    cam.settle();
+    cam.step(100);
     expectNear(ndc(cam, 0.7, -0.2, 0.4, 0.6), [0, 0]);
     for (const [x, y, z] of corners(bounds)) {
       const [px, py, depth] = ndc(cam, 0.7, x, y, z);

@@ -92,13 +92,13 @@ export interface Camera {
   set(state: ViewSyncState): boolean;
   /** Pointer drag between NDC positions: 2D pans; 3D orbits, or pans when `pan`. */
   drag(from: [number, number], to: [number, number], aspect: number, pan: boolean): void;
-  /** Wheel: retarget the zoom (2D) or dolly (3D) about the cursor; `step()` eases toward it. */
+  /** Wheel: zoom (2D) or dolly (3D) about the cursor, applied at once. */
   zoomAt(ndcX: number, ndcY: number, aspect: number, factor: number): void;
-  /** Animate to a view that frames `bounds`. */
+  /** Animate to a view that frames `bounds` (the one timed animation). */
   fit(bounds: Bounds, aspect: number, ms: number, now: number): void;
-  /** Finish any easing at its target; true if the view moved. */
-  settle(): boolean;
-  /** Advance easing by one frame; true if the view moved. */
+  /** Stop a running `fit` where the view is now; true if it was moving. */
+  halt(): boolean;
+  /** Advance the `fit` animation by one frame; true if the view moved. */
   step(now: number): boolean;
 }
 
@@ -106,27 +106,16 @@ function easeInOutQuint(t: number): number {
   return t < 0.5 ? 16 * t * t * t * t * t : 1 - (-2 * t + 2) ** 5 / 2;
 }
 
-// Magnetic detent at "home" zoom, where the [-0.9, 0.9] embedding fills ~80% of the canvas.
-const SNAP_ZOOM = 0.9;
-const SNAP_RANGE = 0.12; // ±12% of SNAP_ZOOM attracts
-const SNAP_STRENGTH = 0.3; // 0 = none, 1 = hard snap
-
-/** 2D orthographic pan/zoom with eased wheel zoom, a home-zoom detent, and timed animations. */
+/** 2D orthographic pan/zoom: wheel zoom about the cursor, and a timed fit animation. */
 export class PanZoom2D implements Camera {
   private pan = [0, 0];
   private zoom = 1;
-  private target: PanZoomView = { panX: 0, panY: 0, zoom: 1 };
   private timed: { from: PanZoomView; to: PanZoomView; start: number; ms: number } | null = null;
-  private easing = false;
   private readonly matrix = new Float32Array(16);
-  private readonly lerp: number;
-  private readonly epsilon: number;
   private readonly minZoom: number;
   private readonly maxZoom: number;
 
   constructor(config?: InteractionConfig) {
-    this.lerp = config?.lerpSpeed ?? 0.06;
-    this.epsilon = config?.lerpEpsilon ?? 0.0001;
     this.minZoom = config?.minZoom ?? 0.1;
     this.maxZoom = config?.maxZoom ?? 500;
   }
@@ -152,7 +141,7 @@ export class PanZoom2D implements Camera {
   }
 
   get animating(): boolean {
-    return this.easing || this.timed !== null;
+    return this.timed !== null;
   }
 
   set(state: ViewSyncState): boolean {
@@ -161,13 +150,11 @@ export class PanZoom2D implements Camera {
     return true;
   }
 
-  /** Jump to `state`, cancelling any easing. */
+  /** Jump to `state`, cancelling any animation. */
   private jump(state: PanZoomView): void {
     this.pan = [state.panX, state.panY];
     this.zoom = state.zoom;
-    this.target = { panX: state.panX, panY: state.panY, zoom: state.zoom };
     this.timed = null;
-    this.easing = false;
   }
 
   /** World point (z = 0) under an NDC position. */
@@ -183,17 +170,9 @@ export class PanZoom2D implements Camera {
   }
 
   zoomAt(ndcX: number, ndcY: number, aspect: number, factor: number): void {
-    const t = this.target;
-    // World point under the cursor at the target (not the eased) view.
-    const wx = (ndcX * aspect) / t.zoom - t.panX;
-    const wy = ndcY / t.zoom - t.panY;
-    let zoom = Math.max(this.minZoom, Math.min(this.maxZoom, t.zoom * factor));
-    const dist = Math.abs(zoom - SNAP_ZOOM);
-    if (dist < SNAP_RANGE * SNAP_ZOOM)
-      zoom += (SNAP_ZOOM - zoom) * (1 - dist / (SNAP_RANGE * SNAP_ZOOM)) * SNAP_STRENGTH;
-    this.target = { panX: (ndcX * aspect) / zoom - wx, panY: ndcY / zoom - wy, zoom };
-    this.timed = null;
-    this.easing = true;
+    const [wx, wy] = this.unproject(ndcX, ndcY, aspect);
+    const zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom * factor));
+    this.jump({ panX: (ndcX * aspect) / zoom - wx, panY: ndcY / zoom - wy, zoom });
   }
 
   fit({ min, max }: Bounds, aspect: number, ms: number, now: number): void {
@@ -208,33 +187,22 @@ export class PanZoom2D implements Camera {
       start: now,
       ms,
     };
-    this.target = this.timed.to;
-    this.easing = false;
   }
 
-  settle(): boolean {
+  halt(): boolean {
     if (!this.animating) return false;
-    this.jump(this.target);
+    this.jump(this.toViewState());
     return true;
   }
 
   step(now: number): boolean {
-    if (this.timed) {
-      const { from, to, start, ms } = this.timed;
-      const raw = Math.min((now - start) / ms, 1);
-      const k = easeInOutQuint(raw);
-      this.pan = [from.panX + (to.panX - from.panX) * k, from.panY + (to.panY - from.panY) * k];
-      this.zoom = from.zoom + (to.zoom - from.zoom) * k;
-      if (raw >= 1) this.jump(to);
-      return true;
-    }
-    if (!this.easing) return false;
-    const t = this.target;
-    this.pan = [this.pan[0] + (t.panX - this.pan[0]) * this.lerp, this.pan[1] + (t.panY - this.pan[1]) * this.lerp];
-    this.zoom += (t.zoom - this.zoom) * this.lerp;
-    const dz = Math.abs(t.zoom - this.zoom) / Math.max(t.zoom, 0.01);
-    const dp = Math.abs(t.panX - this.pan[0]) + Math.abs(t.panY - this.pan[1]);
-    if (dz < this.epsilon && dp < this.epsilon) this.jump(t);
+    if (!this.timed) return false;
+    const { from, to, start, ms } = this.timed;
+    const raw = Math.min((now - start) / ms, 1);
+    const k = easeInOutQuint(raw);
+    this.pan = [from.panX + (to.panX - from.panX) * k, from.panY + (to.panY - from.panY) * k];
+    this.zoom = from.zoom + (to.zoom - from.zoom) * k;
+    if (raw >= 1) this.jump(to);
     return true;
   }
 }
@@ -286,17 +254,11 @@ function mix(a: TurntableView, b: TurntableView, k: number): TurntableView {
  */
 export class Turntable3D implements Camera {
   private view: TurntableView = { yaw: 0.6, pitch: 0.35, distance: HOME, target: [0, 0, 0], projection: "perspective" };
-  private goal: TurntableView = this.view;
   private timed: { from: TurntableView; to: TurntableView; start: number; ms: number } | null = null;
-  private easing = false;
-  private readonly lerp: number;
-  private readonly epsilon: number;
   private readonly minDistance: number;
   private readonly maxDistance: number;
 
   constructor(config?: InteractionConfig) {
-    this.lerp = config?.lerpSpeed ?? 0.06;
-    this.epsilon = config?.lerpEpsilon ?? 0.0001;
     this.minDistance = HOME / (config?.maxZoom ?? 500);
     this.maxDistance = HOME / (config?.minZoom ?? 0.1);
   }
@@ -329,7 +291,7 @@ export class Turntable3D implements Camera {
   }
 
   get animating(): boolean {
-    return this.easing || this.timed !== null;
+    return this.timed !== null;
   }
 
   get projection(): TurntableView["projection"] {
@@ -338,7 +300,6 @@ export class Turntable3D implements Camera {
 
   setProjection(projection: TurntableView["projection"]): void {
     this.view = { ...this.view, projection };
-    this.goal = { ...this.goal, projection };
     if (this.timed) this.timed.to = { ...this.timed.to, projection };
   }
 
@@ -349,9 +310,8 @@ export class Turntable3D implements Camera {
   }
 
   private jump(v: TurntableView): void {
-    this.view = this.goal = { ...v, target: [...v.target] };
+    this.view = { ...v, target: [...v.target] };
     this.timed = null;
-    this.easing = false;
   }
 
   drag(from: [number, number], to: [number, number], aspect: number, pan: boolean): void {
@@ -367,46 +327,30 @@ export class Turntable3D implements Camera {
 
   /** Dolly toward the cursor: the point under it on the target plane stays put. */
   zoomAt(ndcX: number, ndcY: number, aspect: number, factor: number): void {
-    const g = this.goal;
-    const distance = Math.max(this.minDistance, Math.min(this.maxDistance, g.distance / factor));
-    this.goal = { ...g, distance, target: slide(g, ndcX * aspect, ndcY, (g.distance - distance) * TAN) };
-    this.timed = null;
-    this.easing = true;
+    const v = this.view;
+    const distance = Math.max(this.minDistance, Math.min(this.maxDistance, v.distance / factor));
+    this.jump({ ...v, distance, target: slide(v, ndcX * aspect, ndcY, (v.distance - distance) * TAN) });
   }
 
   fit({ min, max }: Bounds, aspect: number, ms: number, now: number): void {
     const target: Vec3 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
     const radius = Math.max(Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2, 1e-3);
     const distance = radius / (Math.sin(FOV / 2) * Math.min(1, aspect));
-    this.goal = { ...this.goal, target, distance };
-    this.timed = { from: this.view, to: this.goal, start: now, ms };
-    this.easing = false;
+    this.timed = { from: this.view, to: { ...this.view, target, distance }, start: now, ms };
   }
 
-  settle(): boolean {
+  halt(): boolean {
     if (!this.animating) return false;
-    this.jump(this.goal);
+    this.jump(this.view);
     return true;
   }
 
   step(now: number): boolean {
-    if (this.timed) {
-      const { from, to, start, ms } = this.timed;
-      const raw = Math.min((now - start) / ms, 1);
-      this.view = mix(from, to, easeInOutQuint(raw));
-      if (raw >= 1) this.jump(to);
-      return true;
-    }
-    if (!this.easing) return false;
-    const g = this.goal;
-    this.view = mix(this.view, g, this.lerp);
-    const dd = Math.abs(g.distance - this.view.distance) / g.distance;
-    const dt = Math.hypot(
-      g.target[0] - this.view.target[0],
-      g.target[1] - this.view.target[1],
-      g.target[2] - this.view.target[2],
-    );
-    if (dd < this.epsilon && dt < this.epsilon * g.distance) this.jump(g);
+    if (!this.timed) return false;
+    const { from, to, start, ms } = this.timed;
+    const raw = Math.min((now - start) / ms, 1);
+    this.view = mix(from, to, easeInOutQuint(raw));
+    if (raw >= 1) this.jump(to);
     return true;
   }
 }
