@@ -74,8 +74,8 @@ export interface DataTableProps {
   sort: SortState | null;
   groupBy: string | null;
   focused: number | null;
-  /** Virtual index to bring into view (the focused row). */
-  reveal: number | null;
+  /** A request to bring a virtual index into view (the focused row); each request object is applied once. */
+  reveal: { readonly index: number } | null;
   selection: Uint32Array | null;
   /** Selected obs count, for the header checkbox. */
   selected: number;
@@ -484,10 +484,14 @@ export function DataTable({
     if (hi >= 0) ensureRange(lo, hi);
   }, [first, last, length, layout, ensureRange]);
 
-  // Gate on the rendered height, not `length`: a new count renders once with the old height, and a scroll into
-  // rows the DOM lacks is lost while the virtualizer still draws them.
+  // Once per request: re-applying it on a later count change would jump to a row that has moved since. Gated on
+  // the rendered height, not `length`: a new count renders once with the old height, and a scroll into rows the
+  // DOM lacks is lost while the virtualizer still draws them.
+  const revealed = useRef<object | null>(null);
   useEffect(() => {
-    if (reveal !== null && reveal < totalSize / ROW_HEIGHT) scrollToIndex(reveal, { align: "auto" });
+    if (!reveal || reveal === revealed.current || reveal.index >= totalSize / ROW_HEIGHT) return;
+    revealed.current = reveal;
+    scrollToIndex(reveal.index, { align: "auto" });
   }, [reveal, totalSize, scrollToIndex]);
 
   const allChecked = selected > 0 && selected >= count;

@@ -249,14 +249,14 @@ export function TableView({ host }: BodyProps<TableConfig>) {
   }, [host, coordinator, table, nObs]);
 
   // ── Focus: reveal the focused row ───────────────────────────────────
-  const [reveal, setReveal] = useState<number | null>(null);
+  const [reveal, setReveal] = useState<{ readonly index: number } | null>(null);
   const ownFocus = useRef<number | null>(null);
   const { positionOf } = query;
   useEffect(() => {
     if (focused === null || focused === ownFocus.current) return;
     let live = true;
     void positionOf(focused).then((position) => {
-      if (live && position !== null) setReveal(layout ? layout.indexOf(position) : position);
+      if (live && position !== null) setReveal({ index: layout ? layout.indexOf(position) : position });
     });
     return () => {
       live = false;
