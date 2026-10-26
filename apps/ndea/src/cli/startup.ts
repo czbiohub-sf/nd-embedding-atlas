@@ -29,7 +29,7 @@ async function openCollection(
     session.state.store.close();
     throw error;
   });
-  return { loaded, datasets, state: session.state, metadata: buildDatasetMetadata(config, datasets, session) };
+  return { loaded, datasets, state: session.state, metadata: buildDatasetMetadata(datasets, session) };
 }
 
 export async function startup(config: LaunchConfig): Promise<void> {

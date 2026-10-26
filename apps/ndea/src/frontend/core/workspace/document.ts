@@ -1,6 +1,6 @@
 /**
  * The workspace document: server-owned and file-persisted. Four fields:
- * `data` (named data sources), `layouts` (named json-render dashboards),
+ * `data` (named data sources), `layouts` (named dashboard specs),
  * `layout` (the active layout's id), and `state` (coordination cells every
  * layout binds). Pure (Zod only) so the server and the browser validate with
  * the same schema. Editor session state lives in `Workspace.session` and never

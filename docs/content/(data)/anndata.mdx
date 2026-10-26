@@ -56,9 +56,3 @@ Variable colouring requires `var` metadata and a readable matrix in `X` or `laye
 - `var`, when present, has one row per matrix column;
 - categorical codes refer to existing category entries;
 - spatial columns use numeric values and consistent pixel coordinates.
-
-Launch with a reduced column set first when diagnosing a wide observation table:
-
-```bash
-ndea view data.zarr --obs-columns treatment,cell_type,fov_name,t,x,y
-```

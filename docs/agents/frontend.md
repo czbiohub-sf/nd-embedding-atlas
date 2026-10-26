@@ -43,9 +43,10 @@ records what was built from it and what still differs.
 
 ## Tiles, tabs, layouts
 
-- json-render renders the active layout's spec (`core/workspace/DashboardPane.tsx`)
-  with the registry in `dashboard-registry.tsx` (`split` + its sash, `stack`,
-  ghost tiles); tile chrome and the view, tabs, and empty tiles are `Tile.tsx`;
+- The dashboard renderer (`SpecElement` in `dashboard-registry.tsx`, mounted by
+  `core/workspace/DashboardPane.tsx`) walks the active layout's spec from its
+  root: element id → registry component (`split` + its sash, `stack`, ghost
+  tiles); tile chrome and the view, tabs, and empty tiles are `Tile.tsx`;
   `tile-drag.ts` owns hit-testing and the drag lifecycle (`dropEdit`, pure);
   `split-geometry.ts` the sash ratio (pure); `FullscreenOverlay.tsx` the
   fullscreen view. `core/workspace/dashboard.ts` holds the component catalog
@@ -64,9 +65,10 @@ records what was built from it and what still differs.
   strip moves it (`move_tab`); onto a tile body swaps tiles (`swap`). A sash
   drag previews locally and commits one `set_props {ratio}` on release. Layout
   editing ships in every build.
-- Components get their element id through a render-only `elementId` prop;
-  props resolve json-render expressions against coordination `state`, and so
-  does a body's config (the runtime manager resolves it; `text` relies on it).
+- Registry components get `{ id, element, children }` and render props as
+  stored. A body's config resolves `$state` / `$template` expressions against
+  coordination `state` (`coordination/expressions.ts`, run by the runtime
+  manager; `text` relies on it).
 
 ## State and runtime
 
@@ -76,8 +78,8 @@ records what was built from it and what still differs.
   `workspace-context.tsx`); coordination cell writes go through
   `coordination`; remote revisions arrive through `applyDocument`. Views ask it
   questions (`element(id)`, `elementPredicate(id)`,
-  `coordination.filterFacet`/`setFilterFacet`/`stateStore`) rather than reading
-  document shape; `WorkspaceSync`, the flyouts, and json-render read
+  `coordination.filterFacet`/`setFilterFacet`) rather than reading
+  document shape; `WorkspaceSync`, the flyouts, and the dashboard renderer read
   `snapshot()`. Editor-only state (selection, fullscreen, highlighted tiles) is
   `WorkspaceSession`.
 - `coordination.assignScope`/`clearScope` run the `bind`/`unbind` ops; the ops

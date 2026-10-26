@@ -44,7 +44,7 @@ describe("coordination cells", () => {
     expect(co.readCoordination("focus", co.scopeOf("n3", "focus")!)).toBeNull();
   });
 
-  test("binding is a json-render $bindState prop, and the cell is seeded for agent patches", () => {
+  test("binding is a $bindState prop, and the cell is seeded for agent patches", () => {
     const { co, ws } = fresh();
     co.assignScope("n1", "filter", "A");
     expect(ws.element("n1")?.props.filter).toEqual({ $bindState: "/filter/A" });
@@ -77,7 +77,6 @@ describe("coordination cells", () => {
     expect(() => co.setCoordinationValue("ordering", "A", { col: "x", dir: "up" as "asc" })).toThrow(
       "failed validation",
     );
-    expect(() => co.stateStore.set("/focus", rowIndex(1))).toThrow("must target /<type>/<scope>");
   });
 
   test("subscribe fires on cell writes and rebinding, never for unrelated scopes", () => {

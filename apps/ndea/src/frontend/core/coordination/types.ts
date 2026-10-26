@@ -1,11 +1,11 @@
 /**
  * Coordination types: ndea's registry over the workspace document's
- * json-render-style `state` section. Pure (Zod + protocol only) so the server
+ * `state` section. Pure (Zod + protocol only) so the server
  * validates and composes coordination exactly like the browser.
  *
  * Layout: `state[type][scope]` holds one shared value, addressed by the JSON
  * Pointer `/<type>/<scope>`. A dashboard element joins a scope through a
- * json-render binding prop, `props[type] = { $bindState: "/<type>/<scope>" }`,
+ * binding prop, `props[type] = { $bindState: "/<type>/<scope>" }`,
  * so an agent links views or drives them with plain JSON Patch.
  */
 
@@ -96,10 +96,6 @@ export const coordinationStateSchema = z
     ),
   )
   .strict() as z.ZodType<CoordinationState>;
-
-export function isCoordinationType(type: string): type is CoordinationTypeId {
-  return Object.hasOwn(COORDINATION_TYPES, type);
-}
 
 export function bindingPointer(type: CoordinationTypeId, scope: string): string {
   return `/${type}/${scope}`;

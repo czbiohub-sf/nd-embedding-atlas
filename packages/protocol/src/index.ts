@@ -343,7 +343,6 @@ export const MetadataSchema = z.looseObject({
   }),
   database: z.object({ type: z.string(), uri: z.string().optional() }),
   obsm: z.record(z.string(), ObsmEntrySchema),
-  obs_columns: z.array(z.string()).optional(),
   /** Number for AnnData; per-modality map for MuData. */
   var_count: z.union([z.number(), z.record(z.string(), z.number())]).optional(),
   layers: z.array(z.string()).optional(),

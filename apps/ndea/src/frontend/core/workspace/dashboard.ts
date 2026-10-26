@@ -1,5 +1,5 @@
 /**
- * The dashboard: named layouts, each a json-render flat spec `{ root, elements }`
+ * The dashboard: named layouts, each a flat spec `{ root, elements }`
  * that composes the whole workspace UI. Every element is one component: layout
  * (`split`, `stack`), a tile's `tabs`, an empty `slot`, or a view (`scatter`,
  * `table`, `text`, `select`, …) whose props are its configuration. Element ids
@@ -10,7 +10,7 @@
  *   means every observation.
  * - `title`: its header text.
  * - `<coordination type>`: `{ $bindState: "/<type>/<scope>" }` joins a
- *   coordination scope (json-render's two-way binding into `state`).
+ *   coordination scope (two-way: the view reads and writes `state` there).
  *
  * Pure (Zod + definitions' config contracts) so the server validates and
  * evaluates exactly what the browser renders.
@@ -73,7 +73,7 @@ export interface LayoutDocument {
   readonly layout: string;
 }
 
-/** A literal string, or a json-render expression resolved against coordination state: what a `title` takes. */
+/** A literal string, or an expression (`coordination/expressions.ts`) over coordination state: what a `title` takes. */
 const textSchema = z.union([
   z.string(),
   z.object({ $template: z.string() }).strict(),

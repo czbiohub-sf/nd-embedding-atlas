@@ -1,6 +1,6 @@
 /**
  * Coordination backbone: the symmetric cross-view plane (Use-Coordination /
- * Vitessce CMV) over the workspace document's json-render `state` and the
+ * Vitessce CMV) over the workspace document's `state` and the
  * dashboard elements' `$bindState` props (see `./types`).
  *
  *   - coordination TYPE: the parameter being shared (`focus`, `filter`, …).
@@ -10,20 +10,18 @@
  *
  * Writes validate against the type's Zod schema and replace the cell
  * (latest-wins). Agents reach the same cells through JSON Patch. Views ask
- * this module (`scopeOf`, `filterFacet`, `stateStore`) instead of reading
+ * this module (`scopeOf`, `filterFacet`) instead of reading
  * element bindings and `state` cells themselves. Binding and unbinding are
  * the `bind`/`unbind` edit ops (`workspace/edits.ts`), which own the binding
  * prop, the new scope's cell, and the filter clean-up; this port only runs them.
  */
 
-import { getByPath, type StateStore } from "@json-render/core";
 import type { FilterClause } from "@ndea/protocol";
 
 import { elementScope, findElement, type LayoutDocument } from "../workspace/dashboard";
 import type { DashboardEdit } from "../workspace/edits";
 import {
   COORDINATION_TYPES,
-  isCoordinationType,
   setFilterFacet,
   type CoordinationState,
   type CoordinationTypeId,
@@ -58,8 +56,6 @@ export interface CoordinationScopeCellPort {
   filterFacet(elementId: string, facet: string): FilterClause | undefined;
   /** Set (null clears) `elementId`'s `facet` in its filter scope; a no-op when unbound. */
   setFilterFacet(elementId: string, facet: string, clause: FilterClause | null): void;
-  /** json-render's state: the cells at `/<type>/<scope>`, written through the type schemas. */
-  readonly stateStore: StateStore;
 }
 
 function withCell(
@@ -74,26 +70,8 @@ function withCell(
 class Coordination implements CoordinationScopeCellPort {
   private readonly document: CoordinationDocumentPort;
 
-  readonly stateStore: StateStore = {
-    get: (path) => getByPath(this.document.snapshot().state, path),
-    set: (path, value) => this.setPath(path, value),
-    update: (updates) => {
-      for (const [path, value] of Object.entries(updates)) this.setPath(path, value);
-    },
-    getSnapshot: () => this.document.snapshot().state,
-    subscribe: (listener) => this.document.subscribe(listener),
-  };
-
   constructor(document: CoordinationDocumentPort) {
     this.document = document;
-  }
-
-  private setPath(path: string, value: unknown): void {
-    const [, type, scope, ...rest] = path.split("/");
-    if (!isCoordinationType(type) || !scope || rest.length > 0) {
-      throw new Error(`dashboard state writes must target /<type>/<scope>, not "${path}"`);
-    }
-    this.setCoordinationValue(type, scope, value as never);
   }
 
   /** Bind an element to a scope (`bind`); a no-op when it already binds that scope or does not exist. */

@@ -1,21 +1,29 @@
 /**
- * The json-render registry for the dashboard: layout components (`split`
- * with its resize sash, `stack`), tiles (`Tile.tsx`), and ghost-tile
- * dispatch: while the harness proposes new tiles, a proposed tile renders as
- * a ghost in place of its component.
+ * The dashboard renderer: `SpecElement` walks a layout's flat spec from an
+ * element id, rendering each element with its registry component: layout
+ * components (`split` with its resize sash, `stack`), tiles (`Tile.tsx`), and
+ * ghost-tile dispatch: while the harness proposes new tiles, a proposed tile
+ * renders as a ghost in place of its component. Props render as stored;
+ * expressions in a view's config resolve in the runtime manager.
  */
 
-import type { ComponentRegistry, ComponentRenderProps } from "@json-render/react";
 import { cn } from "@ndea/ui/lib/utils";
 import { Children, use, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ProposalsContext } from "@/core/proposals/harness";
 import { GhostTile } from "@/core/proposals/Proposals";
 import { ND_STAGE } from "./constants";
-import { activeSpec, COMPONENTS, type Dashboard } from "./dashboard";
+import { COMPONENTS, type Dashboard, type DashboardElement } from "./dashboard";
 import { sashRatio } from "./split-geometry";
-import { idOf, SlotTile, TabsTile, ViewTile } from "./Tile";
+import { SlotTile, TabsTile, ViewTile } from "./Tile";
 import { applyOrToast, useWorkspace, useWorkspaceSelector } from "./workspace-context";
+
+/** What a registry component gets: the element, its id, and its children already rendered. */
+export interface ElementProps {
+  id: string;
+  element: DashboardElement;
+  children?: ReactNode;
+}
 
 /** The gutter between two panes is the resize handle; its hit area overhangs both tiles. */
 function Sash({ horizontal, onPointerDown }: { horizontal: boolean; onPointerDown?: (e: React.PointerEvent) => void }) {
@@ -57,18 +65,17 @@ function Pane({ share, children }: { share: number; children: ReactNode }) {
  * and commits one `set_props` when the pointer lets go, so a drag is one edit,
  * not one document copy per pointer move.
  */
-function Split(props: ComponentRenderProps) {
+function Split({ id, element, children }: ElementProps) {
   const ws = useWorkspace();
-  const id = idOf(props);
   // A split a proposed tile opened exists only in the preview: no resizing until it is accepted.
   const real = useWorkspaceSelector((w) => w.element(id) !== undefined);
   const [preview, setPreview] = useState<number | null>(null);
   /** Removes the live sash drag's listeners; unmounting mid-drag commits nothing. */
   const stopDrag = useRef<(() => void) | null>(null);
   useEffect(() => () => stopDrag.current?.(), []);
-  const horizontal = props.element.props.direction === "column";
-  const ratio = preview ?? Number(props.element.props.ratio);
-  const [first, second] = Children.toArray(props.children);
+  const horizontal = element.props.direction === "column";
+  const ratio = preview ?? Number(element.props.ratio);
+  const [first, second] = Children.toArray(children);
 
   const beginSash = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -107,14 +114,14 @@ function Split(props: ComponentRenderProps) {
   );
 }
 
-function Stack(props: ComponentRenderProps) {
-  const column = props.element.props.direction === "column";
+function Stack({ element, children }: ElementProps) {
+  const column = element.props.direction === "column";
   return (
     <div
       className={`flex min-h-0 min-w-0 flex-1 ${column ? "flex-col" : "flex-row"}`}
-      style={{ gap: Number(props.element.props.gap ?? 4) }}
+      style={{ gap: Number(element.props.gap ?? 4) }}
     >
-      {Children.map(props.children, (child) => (
+      {Children.map(children, (child) => (
         <div className="flex min-h-0 min-w-0 flex-1">{child}</div>
       ))}
     </div>
@@ -122,17 +129,14 @@ function Stack(props: ComponentRenderProps) {
 }
 
 /** A tile the harness proposes renders as a ghost in place of the component. */
-function ghostable(Component: (props: ComponentRenderProps) => ReactNode) {
-  return function Ghostable(props: ComponentRenderProps) {
-    const preview = use(ProposalsContext)?.preview;
-    const id = idOf(props);
-    const ghost = preview?.ghosts.get(id);
-    const element = preview?.document && activeSpec(preview.document).elements[id];
-    return ghost && element ? <GhostTile element={element} item={ghost} /> : <Component {...props} />;
+function ghostable(Component: (props: ElementProps) => ReactNode) {
+  return function Ghostable(props: ElementProps) {
+    const ghost = use(ProposalsContext)?.preview.ghosts.get(props.id);
+    return ghost ? <GhostTile element={props.element} item={ghost} /> : <Component {...props} />;
   };
 }
 
-export const REGISTRY: ComponentRegistry = {
+const REGISTRY: Record<string, (props: ElementProps) => ReactNode> = {
   split: Split,
   stack: Stack,
   slot: SlotTile,
@@ -144,15 +148,16 @@ export const REGISTRY: ComponentRegistry = {
   ),
 };
 
-/** A layout's spec plus each element's id as a render-only prop. */
-export function renderSpec(spec: Dashboard) {
-  return {
-    root: spec.root,
-    elements: Object.fromEntries(
-      Object.entries(spec.elements).map(([id, element]) => [
-        id,
-        { ...element, props: { ...element.props, elementId: id } },
-      ]),
-    ),
-  };
+/** Element `id` of `spec` and, through its component, its subtree; unknown ids and types render nothing. */
+export function SpecElement({ spec, id }: { spec: Dashboard; id: string }) {
+  const element = spec.elements[id];
+  const Component = element && REGISTRY[element.type];
+  if (!Component) return null;
+  return (
+    <Component id={id} element={element}>
+      {element.children.map((child) => (
+        <SpecElement key={child} spec={spec} id={child} />
+      ))}
+    </Component>
+  );
 }

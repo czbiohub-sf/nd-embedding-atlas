@@ -59,8 +59,9 @@ writes UI state:
 
 - **Shape (format v3, exact version only):** `{ data, layouts, layout, state }`.
   `data` = named sources (`from`, typed `where`, `sql`); `layouts` =
-  `{ [id]: { name, spec } }`, each spec a json-render tree; `layout` = the
-  active layout id; `state` = coordination cells shared by every layout.
+  `{ [id]: { name, spec } }`, each spec a flat `{ root, elements }` tree;
+  `layout` = the active layout id; `state` = coordination cells shared by
+  every layout.
   Element ids are unique across all layouts. `core/workspace/document.ts`
   validates it, pure, so server and browser run the same rules. Another format
   version is refused at startup; deleting the file reseeds it from the preset.

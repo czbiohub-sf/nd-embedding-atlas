@@ -73,21 +73,31 @@ export const DashboardEditSchema = z.discriminatedUnion("op", [
   z
     .object({ op: z.literal("set_data"), name: z.string(), source: dataSourceSchema })
     .describe("add or replace a data source"),
-  z.object({ op: z.literal("remove_data"), name: z.string() }),
-  z.object({
-    op: z.literal("add"),
-    type: z.string().describe("component type from list_components"),
-    id: IdSchema.optional().describe("id for the new element (default <type>-<n>); later ops may reference it"),
-    props: PropsSchema.optional().describe("data, title, coordination bindings, and the component's config"),
-    at: AtSchema.optional().describe("default: fill the root if it is an empty slot, else split the root to its right"),
-    layout: LayoutIdSchema.optional().describe("layout to add to (default: the one holding `at`, else the active one)"),
-  }),
-  z.object({
-    op: z.literal("set_props"),
-    id: IdSchema,
-    props: PropsSchema.describe("merged into the element's props; null removes a key"),
-  }),
-  z.object({ op: z.literal("remove"), id: IdSchema }),
+  z.object({ op: z.literal("remove_data"), name: z.string() }).describe("remove a data source"),
+  z
+    .object({
+      op: z.literal("add"),
+      type: z.string().describe("component type from list_components"),
+      id: IdSchema.optional().describe("id for the new element (default <type>-<n>); later ops may reference it"),
+      props: PropsSchema.optional().describe("data, title, coordination bindings, and the component's config"),
+      at: AtSchema.optional().describe(
+        "default: fill the root if it is an empty slot, else split the root to its right",
+      ),
+      layout: LayoutIdSchema.optional().describe(
+        "layout to add to (default: the one holding `at`, else the active one)",
+      ),
+    })
+    .describe(
+      "place a new element in `layout` (default: the layout holding `at`, else the active one): at {slot} fills an empty slot, {stack, index?} inserts into a stack, {beside, side?: left|right|up|down} splits that element's tile (default: fill an empty root slot, else split the root to its right)",
+    ),
+  z
+    .object({
+      op: z.literal("set_props"),
+      id: IdSchema,
+      props: PropsSchema.describe("merged into the element's props; null removes a key"),
+    })
+    .describe("merge props into an element (null removes a key)"),
+  z.object({ op: z.literal("remove"), id: IdSchema }).describe("remove an element"),
   z
     .object({
       op: z.literal("split"),
@@ -95,17 +105,27 @@ export const DashboardEditSchema = z.discriminatedUnion("op", [
       side: SideSchema.optional().describe("where the new empty tile goes (default: right)"),
       slot: IdSchema.optional().describe("id for the new empty tile (default slot-<n>); later ops may reference it"),
     })
-    .describe("split an element in two, leaving a new empty tile on `side`; set the split's ratio with set_props"),
-  z.object({ op: z.literal("swap"), a: IdSchema, b: IdSchema }),
-  z.object({ op: z.literal("bind"), id: IdSchema, type: CoordinationTypeSchema, scope: ScopeSchema }),
-  z.object({ op: z.literal("unbind"), id: IdSchema, type: CoordinationTypeSchema }),
-  z.object({
-    op: z.literal("set_filter"),
-    scope: ScopeSchema,
-    source: z.string().min(1).describe("your own source key, e.g. 'agent'; never another element's id"),
-    facet: z.string().min(1),
-    clause: FilterClauseSchema.nullable().describe("null removes the clause"),
-  }),
+    .describe(
+      "split an element (a tab: its tile) in two, leaving a new empty tile on `side` (left|right|up|down, default right) with id `slot`; set the split's ratio with set_props",
+    ),
+  z.object({ op: z.literal("swap"), a: IdSchema, b: IdSchema }).describe("swap two tiles"),
+  z
+    .object({ op: z.literal("bind"), id: IdSchema, type: CoordinationTypeSchema, scope: ScopeSchema })
+    .describe("set the element's {$bindState} prop for `type`, creating the link (scope) if needed"),
+  z
+    .object({ op: z.literal("unbind"), id: IdSchema, type: CoordinationTypeSchema })
+    .describe("drop the element's binding for `type` and its own filter clauses"),
+  z
+    .object({
+      op: z.literal("set_filter"),
+      scope: ScopeSchema,
+      source: z.string().min(1).describe("your own source key, e.g. 'agent'; never another element's id"),
+      facet: z.string().min(1),
+      clause: FilterClauseSchema.nullable().describe("null removes the clause"),
+    })
+    .describe(
+      "write your own crossfilter clause under your source key (null removes it); every member of the link sees it",
+    ),
   z
     .object({
       op: z.literal("add_tab"),
@@ -114,7 +134,9 @@ export const DashboardEditSchema = z.discriminatedUnion("op", [
       props: PropsSchema.optional(),
       id: IdSchema.optional().describe("id for the new view (default <type>-<n>)"),
     })
-    .describe("add a view as the tile's new, active tab"),
+    .describe(
+      "add a view as the tile's new, active tab (a bare view tile is wrapped in tabs; an empty tile is filled)",
+    ),
   z
     .object({
       op: z.literal("move_tab"),
@@ -124,7 +146,9 @@ export const DashboardEditSchema = z.discriminatedUnion("op", [
       ),
       index: z.number().int().nonnegative().optional().describe("position among the target's tabs (default: last)"),
     })
-    .describe("move a view into another tile as its active tab; its old tile keeps the rest (or becomes empty)"),
+    .describe(
+      "move a view into another tile of the same layout as its active tab; its old tile keeps the rest (or becomes empty)",
+    ),
   z
     .object({ op: z.literal("close_tab"), id: IdSchema })
     .describe("remove a view from its tile; closing a tile's last tab leaves an empty tile"),
@@ -136,8 +160,10 @@ export const DashboardEditSchema = z.discriminatedUnion("op", [
       name: z.string().min(1),
       from: LayoutIdSchema.optional().describe("layout to duplicate (fresh element ids); omit for one empty tile"),
     })
-    .describe("add a named layout; it does not become active (set_active_layout)"),
-  z.object({ op: z.literal("rename_layout"), id: LayoutIdSchema, name: z.string().min(1) }),
+    .describe(
+      "add a named layout (`from` duplicates that layout with fresh element ids; omitted: one empty tile); it does not become active (set_active_layout)",
+    ),
+  z.object({ op: z.literal("rename_layout"), id: LayoutIdSchema, name: z.string().min(1) }).describe("rename a layout"),
   z.object({ op: z.literal("remove_layout"), id: LayoutIdSchema }).describe("remove a layout (never the last one)"),
   z.object({ op: z.literal("set_active_layout"), id: LayoutIdSchema }).describe("show this layout"),
 ]);

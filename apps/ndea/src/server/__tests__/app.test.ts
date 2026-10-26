@@ -48,7 +48,6 @@ function createMockState(store: DatasetQuerySession): ServerSession {
 /** Create minimal dataset session metadata for testing. */
 function createMockConfig(): DatasetSessionMetadata {
   return {
-    obsColumnNames: ["obs_name", "_dataset", "category", "value"],
     embeddingProps: {
       data: {
         id: "__row_index__",
@@ -125,8 +124,6 @@ describe("createApp", () => {
 
     const body = MetadataSchema.parse(await res.json());
     expect(body).toHaveProperty("obsm");
-    expect(body).toHaveProperty("obs_columns");
-    expect(body.obs_columns).toContain("category");
     expect(body.database).toEqual({ type: "rest" });
     expect(body.spatial?.crop_fov_col).toBe("fov_name");
     expect(body.spatial?.z_col).toBe("z_slice");

@@ -172,7 +172,6 @@ function firstPlateMetadata(mounts: readonly PlateMount[], metadata: PlateMetada
 }
 
 export function buildDatasetMetadata(
-  config: LaunchConfig,
   datasets: PreparedDatasets,
   session: PreparedServerSession,
 ): DatasetSessionMetadata {
@@ -182,7 +181,6 @@ export function buildDatasetMetadata(
     datasets.isMultiDataset,
   );
   return {
-    obsColumnNames: config.obsColumns ?? datasets.detectedObsColumns,
     embeddingProps: {},
     hasPlate: session.state.plateMounts.length > 0,
     plateMeta,

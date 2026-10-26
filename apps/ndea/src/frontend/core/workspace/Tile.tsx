@@ -1,12 +1,11 @@
 /**
  * Tile chrome: the frame, the 30px header (tab strip · chip · actions;
- * right-click for split and remove), and the tiles json-render renders: a
+ * right-click for split and remove), and the tiles the dashboard renders: a
  * bare view (one tab), a `tabs` element (several), and an empty tile
  * (`slot`). A view tile adopts its active view's live body from its dock.
  * Every write is a named edit.
  */
 
-import type { ComponentRenderProps } from "@json-render/react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -22,6 +21,7 @@ import { useState, type ReactNode } from "react";
 
 import { BodySocket, BodyStatus } from "./body-dock";
 import { COMPONENTS, elementTitle, EMPTY_TILE_CHOICES, tileProps, type SplitSide } from "./dashboard";
+import type { ElementProps } from "./dashboard-registry";
 import { EmbeddingChip } from "./EmbeddingChip";
 import { LinksIndicator } from "./LinksPopover";
 import { copyReference } from "./reference";
@@ -33,9 +33,6 @@ export const TILE_FRAME =
   "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[7px] bg-surface shadow-(--shadow-tile)";
 export const TILE_HEADER = "flex h-(--tile-header) shrink-0 items-center gap-1.5 overflow-hidden px-1.5";
 const SPLIT_SIDES: readonly SplitSide[] = ["left", "right", "up", "down"];
-
-/** Render-time element id: json-render does not pass element keys to components. */
-export const idOf = ({ element }: ComponentRenderProps): string => String(element.props.elementId);
 
 interface Tab {
   id: string;
@@ -253,22 +250,18 @@ function ViewsTile({ tile, tabIds, active }: { tile: string; tabIds: readonly st
 }
 
 /** A bare view leaf: a one-tab tile. */
-export function ViewTile(props: ComponentRenderProps) {
-  const id = idOf(props);
+export function ViewTile({ id }: ElementProps) {
   return <ViewsTile tile={id} tabIds={[id]} active={id} />;
 }
 
-/** A `tabs` element: its children are the tabs; json-render's rendered children are not used. */
-export function TabsTile(props: ComponentRenderProps) {
-  return (
-    <ViewsTile tile={idOf(props)} tabIds={props.element.children ?? []} active={String(props.element.props.active)} />
-  );
+/** A `tabs` element: its children are the tabs (the renderer's rendered children go unused); `active` is a child id, validated. */
+export function TabsTile({ id, element }: ElementProps) {
+  return <ViewsTile tile={id} tabIds={element.children} active={element.props.active as string} />;
 }
 
 /** An empty tile (`slot`): pick the view that fills it. It drags as a whole and never takes tabs. */
-export function SlotTile(props: ComponentRenderProps) {
+export function SlotTile({ id }: ElementProps) {
   const ws = useWorkspace();
-  const id = idOf(props);
   return (
     <Tile id={id} strip={<TabStrip tile={id} tabs={[{ id, title: COMPONENTS.slot.title }]} active={id} />}>
       <div className="mx-2 mb-2 flex min-h-0 flex-1 overflow-auto rounded-md border-[1.5px] border-line-2 border-dashed p-2">

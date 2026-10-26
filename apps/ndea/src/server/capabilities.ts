@@ -15,7 +15,7 @@
 import { type DataCapability, DataCapabilitySchema } from "@ndea/protocol";
 
 export interface CapabilityInputs {
-  /** obs dataframe present (obs_columns non-empty). Effectively always true. */
+  /** The `dataset` VIEW has obs columns. Effectively always true. */
   hasObs: boolean;
   /** var count: number (AnnData) or per-modality record (MuData). */
   varCount: number | Record<string, number> | undefined;

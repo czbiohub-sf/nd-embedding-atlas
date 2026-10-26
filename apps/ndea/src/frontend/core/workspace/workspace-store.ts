@@ -38,7 +38,7 @@ export class WorkspaceStore {
     this.name = name;
   }
 
-  /** The whole document: for sync, history, and json-render's spec only. */
+  /** The whole document: for sync, history, and the dashboard renderer only. */
   snapshot(): WorkspaceDocument {
     return this.documentStore.state;
   }

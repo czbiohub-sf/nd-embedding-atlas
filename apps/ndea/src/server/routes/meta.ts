@@ -63,13 +63,6 @@ export function handleMetadata(state: ServerSession, config: DatasetSessionMetad
     },
     database: { type: "rest" },
     obsm: buildObsmMetadata(state.availableObsmKeys, state),
-    // The session's obs columns plus live annotation columns, as far as the
-    // VIEW has them. `__`-prefixed columns are internal machinery
-    // (categorical encodings `__ev_<col>_id`, var-expression columns, row
-    // identity) that clients (table grid, obs color picker) never list.
-    obs_columns: [...new Set([...config.obsColumnNames, ...state.store.annotationColumns.keys()])].filter(
-      (c) => !c.startsWith("__") && state.store.columns().has(c),
-    ),
     plate: config.hasPlate,
     export_dir: exportDir(),
     var_count: firstVarCount(state),
@@ -134,7 +127,7 @@ export function handleMetadata(state: ServerSession, config: DatasetSessionMetad
   const spatialMeta = result.spatial as { x_col?: string | null } | undefined;
   const modalities = result.modalities as string[] | undefined;
   result.capabilities = deriveDataCapabilities({
-    hasObs: (config.obsColumnNames?.length ?? 0) > 0,
+    hasObs: [...state.store.columns()].some(([name, column]) => column.kind === "obs" && !name.startsWith("__")),
     varCount: result.var_count as number | Record<string, number> | undefined,
     obsmKeys: Object.keys(result.obsm as Record<string, unknown>),
     hasSpatialXY: spatialMeta?.x_col != null,

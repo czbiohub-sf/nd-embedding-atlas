@@ -23,7 +23,6 @@ export interface PreparedDatasets {
   availableObsmKeys: string[];
   spatial: SpatialColumns | null;
   hidden: Set<string>;
-  detectedObsColumns: string[];
 }
 
 function countMuDataVariables(mudata: MuData): number {
@@ -115,7 +114,6 @@ export function prepareDatasets(loaded: LoadedDataset[]): PreparedDatasets {
     availableObsmKeys: sortObsmKeys([...new Set(allObsmKeys)]),
     spatial,
     hidden,
-    detectedObsColumns: firstColumns.filter((column) => !column.startsWith("__") && !hidden.has(column)),
   };
 }
 
