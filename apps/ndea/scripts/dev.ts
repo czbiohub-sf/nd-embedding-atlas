@@ -2,7 +2,8 @@
 /**
  * `vp run dev [--fixture]`: one Bun process serves the API, /data/query, /ws,
  * /mcp, and the frontend source through Bun's dev server (HMR, browser console
- * echoed here) on PORT. portless assigns PORT and proxies
+ * echoed here) on PORT; `bun --watch` restarts it when server code changes.
+ * portless assigns PORT and proxies
  * https://ndea.localhost (https://<branch>.ndea.localhost in a linked
  * worktree). Run from the repo root so bunfig.toml's `[serve.static]` plugins
  * (scripts/frontend-plugin.ts) apply.

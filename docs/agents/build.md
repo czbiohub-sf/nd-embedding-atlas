@@ -4,9 +4,12 @@ Reference for `apps/ndea/scripts/`, the dev server, and distribution.
 
 ## Dev server
 
-- `vp run dev` = `bun x --bun portless run bun apps/ndea/scripts/dev.ts` →
-  `ndea view --dev`: one Bun process serves the frontend through Bun's dev
+- `vp run dev` = `bun x --bun portless run bun --watch apps/ndea/scripts/dev.ts`
+  → `ndea view --dev`: one Bun process serves the frontend through Bun's dev
   server (HMR, browser console echoed), the API, `/data/query`, `/ws`, `/mcp`.
+  `--watch` restarts the process when a file it loaded changes (server, CLI,
+  and the pure workspace model the server imports); frontend-only files stay
+  on HMR. A restart reopens the cached ingest in well under a second.
   portless names it `https://ndea.localhost` (a linked worktree gets
   `https://<last branch segment>.ndea.localhost`); its first run starts the
   proxy (HTTPS on :443, sudo and a CA trust once). `PORTLESS=0 vp run dev`

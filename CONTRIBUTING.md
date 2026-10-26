@@ -60,7 +60,7 @@ docs/                 Independent Waku documentation app
 ## Development workflow
 
 ```bash
-# Dev server: one Bun process (frontend with HMR + API) at https://ndea.localhost
+# Dev server: one Bun process (frontend with HMR + API, restarted when server code changes) at https://ndea.localhost
 # (a linked worktree: https://<last branch segment>.ndea.localhost), opening
 # ../ome-atlas-test-data/infectomics/infectomics.yaml. Run from the repo root;
 # Ctrl+C stops it. The first run starts the portless proxy (HTTPS on :443, asks

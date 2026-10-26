@@ -24,7 +24,7 @@ document**; every change by anyone is an edit to it.
 
 ```bash
 vp run verify                 # check + test every workspace (cached); the gate before any commit
-vp run dev [--fixture]        # one Bun process with HMR; infectomics beside the repo, or synthetic data
+vp run dev [--fixture]        # one Bun process: frontend HMR, server restarts on change; infectomics beside the repo, or synthetic data
 vp run ndea <args>            # the CLI from source, e.g. `vp run ndea view <project.yaml>`
 vp run build                  # dist/ndea, the single-file binary
 vp run audit:gate             # fallow audit: fails on dead code, boundary, dupes, complexity this change adds (CI runs it)
