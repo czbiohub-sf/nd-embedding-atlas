@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { vec3 } from "gl-matrix";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useFocus } from "../query/useFocus";
@@ -19,11 +19,18 @@ interface Props {
   datasetKey?: string;
 }
 
+/**
+ * Hides the canvas while a new FOV (or a recreated runtime) draws its first
+ * frame, so the camera jump and the empty layers never show. Once a FOV has
+ * been shown it stays shown: another obs or timepoint in it keeps the last
+ * frame on screen until the next one draws, instead of blanking.
+ */
 function ViewerPresentationCover({ ready, presentationKey }: { ready: boolean; presentationKey: string }) {
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  const revealed = revealedKey === presentationKey;
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || revealed) return;
     let thirdFrame = 0;
     let secondFrame = 0;
     const firstFrame = requestAnimationFrame(() => {
@@ -36,11 +43,9 @@ function ViewerPresentationCover({ ready, presentationKey }: { ready: boolean; p
       cancelAnimationFrame(secondFrame);
       cancelAnimationFrame(thirdFrame);
     };
-  }, [ready, presentationKey]);
+  }, [ready, revealed, presentationKey]);
 
-  return ready && revealedKey === presentationKey ? null : (
-    <div className="pointer-events-none absolute inset-0 z-10 bg-surface" />
-  );
+  return revealed ? null : <div className="pointer-events-none absolute inset-0 z-10 bg-surface" />;
 }
 
 export function SingleCropViewer({ datasetKey }: Props) {
@@ -64,6 +69,8 @@ export function SingleCropViewer({ datasetKey }: Props) {
     },
     enabled: focusedRowIndex != null,
     staleTime: 10_000,
+    // Keep the last obs while the next loads, so the FOV (and the loader) holds steady instead of dropping out.
+    placeholderData: keepPreviousData,
   });
 
   // ── Dataset filtering ─────────────────────────────────────────────
@@ -237,10 +244,5 @@ export function SingleCropViewer({ datasetKey }: Props) {
     sourceReady,
     aggregateState: viewerState.aggregateState,
   });
-  return (
-    <ViewerPresentationCover
-      ready={ready}
-      presentationKey={`${focusedRowIndex}:${sourceUrl ?? ""}:${viewerState.generation}`}
-    />
-  );
+  return <ViewerPresentationCover ready={ready} presentationKey={`${sourceUrl ?? ""}:${viewerState.generation}`} />;
 }

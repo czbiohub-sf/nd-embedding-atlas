@@ -52,6 +52,7 @@
 
 ### 🐛 Bug Fixes
 
+- _(image-viewer)_ Focusing another obs blanked the viewer for a moment, as if it remounted, even for the same cell at the next timepoint: a cover hid the canvas on every focus change until the new obs's info and tiles were in. The cover now shows only when the viewer opens a different FOV (or switches 2D ↔ 3D); within a FOV the last frame stays on screen until the next draws. The WebGL runtime was never remounted; within a FOV the layers are kept, only T moves.
 - _(server)_ Gene columns from a sparse (CSR/CSC) `X` held the stored values in the first rows and NULL elsewhere; they now have each value at its row and 0 where nothing is stored. Gene and annotation values are exact (no SQL literal rounding), and ingest appends whole data chunks instead of rows.
 - Wire CLI startup to createApp, fix DuckDB ingestion
 - Metadata props.data schema, dev script, frontend scripts cleanup
