@@ -52,6 +52,7 @@
 
 ### 🐛 Bug Fixes
 
+- _(image-viewer)_ Resizing a remote-rendered viewer stretched the last frame to the new tile shape until the stream caught up, and the stream only resized once a drag paused for 100 ms. The stale frame is now letterboxed (`object-fit: contain`), and resizes go out at once and then at most every 100 ms, so the stream follows a drag (about 70–100 ms behind, was 170–200 ms).
 - _(image-viewer)_ Focusing another obs blanked the viewer for a moment, as if it remounted, even for the same cell at the next timepoint: a cover hid the canvas on every focus change until the new obs's info and tiles were in. The cover now shows only when the viewer opens a different FOV (or switches 2D ↔ 3D); within a FOV the last frame stays on screen until the next draws. The WebGL runtime was never remounted; within a FOV the layers are kept, only T moves.
 - _(server)_ Gene columns from a sparse (CSR/CSC) `X` held the stored values in the first rows and NULL elsewhere; they now have each value at its row and 0 where nothing is stored. Gene and annotation values are exact (no SQL literal rounding), and ingest appends whole data chunks instead of rows.
 - Wire CLI startup to createApp, fix DuckDB ingestion

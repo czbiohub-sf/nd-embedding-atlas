@@ -242,10 +242,20 @@ export function RemoteViewerProvider({
     canvas.addEventListener("contextmenu", onContextMenu);
 
     // ── Resize: the page re-lays out at the tile's size ─────────────────
+    // At most one resize per 100 ms, the first at once: a drag tracks the tile instead of
+    // waiting for it to stop (each resize restarts the encoder at the new size).
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    let resizePending = false;
+    const flushResize = () => {
+      resizeTimer = undefined;
+      if (!resizePending) return;
+      resizePending = false;
+      send({ _type: "render/resize", ...viewport() });
+      resizeTimer = setTimeout(flushResize, 100);
+    };
     const resize = new ResizeObserver(() => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => send({ _type: "render/resize", ...viewport() }), 100);
+      resizePending = true;
+      if (resizeTimer === undefined) flushResize();
     });
     resize.observe(canvas);
 

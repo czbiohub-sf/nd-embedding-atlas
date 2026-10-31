@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { cn } from "@ndea/ui/lib/utils";
 import { useFocus } from "../query/useFocus";
 import { useImageViewerHost, useImageViewerServices } from "./context";
 import { Viewer, ViewerControls, ViewerErrorBoundary, ViewerLoadingOverlay } from "./viewer";
@@ -62,7 +63,10 @@ export function CropViewer({ channelInstance = "docked", datasetKey, mode, onRen
     return <div className="h-full w-full" />;
   }
 
-  const canvas = <Viewer.Canvas className="absolute inset-0 h-full w-full" />;
+  // Remote: until the stream catches up with a resize, the last frame is letterboxed, never stretched.
+  const canvas = (
+    <Viewer.Canvas className={cn("absolute inset-0 h-full w-full", mode === "remote" && "object-contain")} />
+  );
   // The render page streams the bare canvas; its controls render on the remote tile.
   if (mode === "page" && remote.page) {
     return (
